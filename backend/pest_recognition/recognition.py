@@ -32,27 +32,53 @@ class PlantDiseaseRecognizer:
             self.model = None
     
     def preprocess_image(self, image_path):
-        """Preprocess the image to match model input requirements
-        based on the preprocessing in the training code"""
+    
         try:
-            # Read image using skimage as in the training code
-            img_array = io.imread(image_path)
-            # Convert color channels to match training preprocessing
-            img_array = img_array[:, :, ::-1]
-            # Resize to 28x28 as in the training code
-            new_array = resize(img_array, (self.img_size, self.img_size))
-            new_array = img_as_ubyte(new_array)
+        # Read image using skimage with error handling
+            try:
+                img_array = io.imread(image_path)
+                print(f"Image successfully read, shape: {img_array.shape}")
+            except Exception as e:
+                print(f"Error reading image with skimage: {e}")
+                # Fallback to PIL
+                from PIL import Image
+                import numpy as np
+                img = Image.open(image_path)
+                img_array = np.array(img)
+                print(f"Image read with PIL, shape: {img_array.shape}")
             
-            # Normalize to match training preprocessing
-            new_array = new_array.astype('float32')
-            new_array = new_array / 255.0
-            
-            # Reshape for the model (batch, width, height, channels)
-            processed_img = new_array.reshape(-1, self.img_size, self.img_size, 3)
-            
-            return processed_img
+            # Handle different image formats
+                if len(img_array.shape) == 2:
+                    # Convert grayscale to RGB
+                    print("Converting grayscale to RGB")
+                    img_array = np.stack((img_array,)*3, axis=-1)
+                elif img_array.shape[2] == 4:
+                    # Handle RGBA images
+                    print("Removing alpha channel from RGBA image")
+                    img_array = img_array[:,:,:3]
+                
+                # Convert color channels to match training preprocessing
+                img_array = img_array[:, :, ::-1]
+                print(f"After color channel conversion, shape: {img_array.shape}")
+                
+                # Resize to 28x28 as in the training code
+                new_array = resize(img_array, (self.img_size, self.img_size))
+                new_array = img_as_ubyte(new_array)
+                print(f"After resize, shape: {new_array.shape}")
+                
+                # Normalize to match training preprocessing
+                new_array = new_array.astype('float32')
+                new_array = new_array / 255.0
+                
+                # Reshape for the model (batch, width, height, channels)
+                processed_img = new_array.reshape(-1, self.img_size, self.img_size, 3)
+                print(f"Final processed shape: {processed_img.shape}")
+                
+                return processed_img
         except Exception as e:
             print(f"Error preprocessing image: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def predict(self, image_path):

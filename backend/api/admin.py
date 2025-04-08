@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CropRecommendation,PredictionHistory
+from .models import CropRecommendation,PredictionHistory,PlantDiseaseDetection
 
 @admin.register(CropRecommendation)
 class CropRecommendationAdmin(admin.ModelAdmin):
@@ -27,3 +27,27 @@ class PredictionHistoryAdmin(admin.ModelAdmin):
         }),
     )
 
+@admin.register(PlantDiseaseDetection)
+class PlantDiseaseDetectionAdmin(admin.ModelAdmin):
+    list_display = ('detected_disease', 'confidence_formatted', 'user', 'created_at')
+    list_filter = ('detected_disease', 'created_at')
+    search_fields = ('detected_disease', 'user__username', 'user__email')
+    readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+    
+    def confidence_formatted(self, obj):
+        """Format confidence as percentage"""
+        return f"{obj.confidence:.2%}"
+    confidence_formatted.short_description = 'Confidence'
+    
+    fieldsets = (
+        ('Detection Information', {
+            'fields': ('user', 'detected_disease', 'confidence', 'created_at')
+        }),
+        ('Image', {
+            'fields': ('image',)
+        }),
+        ('Treatment', {
+            'fields': ('treatment',)
+        }),
+    )

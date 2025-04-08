@@ -4,12 +4,13 @@ from rest_framework.permissions import IsAuthenticated
 from api.models import CropRecommendation
 from crop_prediction.prediction import predict_crop, recommend_fertilizer
 from .serializers import CropRecommendationSerializer
-from pest_recognition.models import PlantDiseaseDetection
+from .models import PlantDiseaseDetection
 from users.models import User
-from pest_recognition.recognition import recognizer, get_treatment_recommendation
+from pest_recognition.recognition import recognizer, get_treatment_recommendation, PlantDiseaseRecognizer
 from .serializers import PlantDiseaseDetectionSerializer
 from api.models import PredictionHistory
 from api.serializers import PredictionHistorySerializer
+from django.conf import settings
 import os
 import json
 
@@ -81,41 +82,54 @@ class CropPredictionView(generics.CreateAPIView):
 class PestRecognitionView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PlantDiseaseDetectionSerializer
-    
     def create(self, request, *args, **kwargs):
         # Get image from request
         image = request.FILES.get('image')
         if not image:
             return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            
         # Save temporary image
         temp_image_path = os.path.join(settings.MEDIA_ROOT, 'temp', image.name)
         os.makedirs(os.path.dirname(temp_image_path), exist_ok=True)
-        
+            
         with open(temp_image_path, 'wb+') as destination:
             for chunk in image.chunks():
                 destination.write(chunk)
         
-        # Predict pest and confidence
-        pest_name, confidence = recognizer(temp_image_path)
+        # Predict disease and confidence
+        disease_name, confidence = recognizer.predict(temp_image_path)
+        
+        # Handle None response
+        if disease_name is None:
+            disease_name = "Unknown disease"
+            confidence = 0.0
         
         # Get treatment recommendation
-        treatment = get_treatment_recommendation(pest_name)
+        treatment = get_treatment_recommendation(disease_name)
+            
+        try:
+            # Create detection record
+            detection = PlantDiseaseDetection.objects.create(
+                user=request.user,
+                image=image,
+                detected_disease=disease_name,
+                confidence=confidence,
+                treatment=treatment
+            )
+            
+            # Clean up temp file
+            os.remove(temp_image_path)
+                
+            serializer = self.get_serializer(detection)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         
-        # Create detection record
-        detection = PlantDiseaseDetection.objects.create(
-            user=request.user,
-            image=image,
-            detected_pest=pest_name,
-            confidence=confidence,
-            treatment=treatment
-        )
-        
-        # Clean up temp file
-        os.remove(temp_image_path)
-        
-        serializer = self.get_serializer(detection)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            # Clean up temp file
+            if os.path.exists(temp_image_path):
+                os.remove(temp_image_path)
+            return Response({'error': f'Failed to save detection: {str(e)}'}, 
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
 
 
 class PredictionHistoryViewSet(viewsets.ReadOnlyModelViewSet):

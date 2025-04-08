@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from api.models import CropRecommendation
-from pest_recognition.models import PlantDiseaseDetection
+from .models import PlantDiseaseDetection
 from .models import PredictionHistory
 
 class CropRecommendationSerializer(serializers.ModelSerializer):
