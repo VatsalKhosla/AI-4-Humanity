@@ -49,7 +49,7 @@ bash
 Copy
 Edit
 # Clone the repository
-git clone https://github.com/your-username/your-repo.git
+git clone https://github.com/VatsalKhosla/AI-4-Humanity.git
 cd your-repo/backend
 
 # Create virtual environment
